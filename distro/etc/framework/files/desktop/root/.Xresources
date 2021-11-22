@@ -1,0 +1,11 @@
+xterm*faceName: Ubuntu Mono
+xterm*faceSize: 10
+xterm*renderFont: true
+xterm*loginShell: true
+xterm*termName: xterm-color
+xterm*rightScrollBar: true
+xterm*ScrollBar: true
+xterm*highlightSelection: true
+xterm*trimSelection: true
+xterm*saveLines: 4096
+xterm*vt100*geometry: 60x20

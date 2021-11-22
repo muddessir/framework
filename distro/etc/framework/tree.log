@@ -1,0 +1,157 @@
+/opt/framework/distro/
+├── etc
+│   ├── adduser.conf
+│   ├── apt
+│   │   ├── sources-buster.ls
+│   │   ├── sources-focal.ls
+│   │   └── sources-precise.ls
+│   ├── bash
+│   │   ├── bashrc
+│   │   ├── header
+│   │   └── profile
+│   ├── bash.bashrc
+│   ├── default
+│   │   ├── console-setup
+│   │   └── useradd
+│   ├── framework
+│   │   ├── clean.sh
+│   │   ├── conf
+│   │   │   ├── dconf.settings
+│   │   │   ├── dev.sh
+│   │   │   └── paths.h
+│   │   ├── create-initrd.sh
+│   │   ├── daemons
+│   │   │   ├── desktop.sh
+│   │   │   └── init.sh
+│   │   ├── files
+│   │   │   ├── core
+│   │   │   │   └── tmp
+│   │   │   │       └── .placeholder
+│   │   │   ├── desktop
+│   │   │   │   ├── etc
+│   │   │   │   │   ├── lightdm
+│   │   │   │   │   │   ├── aqua-graphite.jpg
+│   │   │   │   │   │   ├── lightdm-gtk-greeter.conf
+│   │   │   │   │   │   └── Nightshade.theme
+│   │   │   │   │   ├── plymouth
+│   │   │   │   │   │   └── plymouthd.conf
+│   │   │   │   │   └── xdg
+│   │   │   │   │       └── openbox
+│   │   │   │   │           ├── autostart
+│   │   │   │   │           ├── environment
+│   │   │   │   │           ├── menu.xml
+│   │   │   │   │           └── rc.xml
+│   │   │   │   ├── root
+│   │   │   │   │   ├── .local
+│   │   │   │   │   │   └── share
+│   │   │   │   │   │       └── onboard
+│   │   │   │   │   │           └── themes
+│   │   │   │   │   │               └── Nightshade.theme
+│   │   │   │   │   └── .Xresources
+│   │   │   │   └── usr
+│   │   │   │       └── share
+│   │   │   │           └── X11
+│   │   │   │               └── xorg.conf.d
+│   │   │   │                   ├── 10-evdev.bck
+│   │   │   │                   └── 62-single_lcd_portrait_mode.bck
+│   │   │   └── dev
+│   │   │       ├── etc
+│   │   │       │   ├── apt
+│   │   │       │   │   └── sources.list
+│   │   │       │   ├── issue
+│   │   │       │   └── systemd
+│   │   │       │       ├── boot.mount
+│   │   │       │       └── home.mount
+│   │   │       └── usr
+│   │   │           └── share
+│   │   ├── first-boot-core.sh
+│   │   ├── first-boot-desktop.sh
+│   │   ├── first-boot-dev.sh
+│   │   ├── sync.sh
+│   │   ├── tmp
+│   │   │   ├── boot.mount
+│   │   │   ├── home.mount
+│   │   │   ├── locale.purge
+│   │   │   └── wired-local.nmconnection
+│   │   └── tree.log
+│   ├── fw_env.config
+│   ├── hostname
+│   ├── hosts
+│   ├── htoprc
+│   ├── initramfs-tools
+│   │   ├── conf.d
+│   │   │   └── debian.conf
+│   │   ├── files
+│   │   │   └── etc
+│   │   │       └── framework
+│   │   │           ├── cmdline.h
+│   │   │           ├── lib.h
+│   │   │           └── readme.md
+│   │   ├── hooks
+│   │   │   └── za-initrd-hook
+│   │   ├── initramfs.conf
+│   │   ├── modules
+│   │   ├── scripts
+│   │   │   ├── init-bottom
+│   │   │   │   ├── zc-overlay
+│   │   │   │   └── zz-sync
+│   │   │   ├── local-premount
+│   │   │   │   ├── za-init
+│   │   │   │   ├── zb-update
+│   │   │   │   └── zz-finish
+│   │   │   └── nfs-premount
+│   │   │       └── za-init
+│   │   └── update-initramfs.conf
+│   ├── issue
+│   ├── issue.net
+│   ├── kbd
+│   │   └── config
+│   ├── login.defs
+│   ├── logrotate.d
+│   │   ├── initrd
+│   │   └── system
+│   ├── motd
+│   ├── neofetch
+│   │   └── config.conf
+│   ├── profile
+│   ├── skel
+│   │   ├── .bash_history
+│   │   ├── .bash_profile
+│   │   ├── .bashrc
+│   │   ├── .profile
+│   │   └── .Xresources
+│   ├── ssh
+│   │   └── sshd_config
+│   ├── sysctl.conf
+│   └── systemd
+│       ├── journald.conf
+│       ├── resolved.conf
+│       ├── system
+│       │   ├── boot.mount
+│       │   ├── daemon-desktop.service
+│       │   ├── daemon-firstboot.service
+│       │   ├── daemon-init.service
+│       │   └── home.mount
+│       ├── system.conf
+│       └── timesyncd.conf
+├── root
+│   ├── .config
+│   │   └── mc
+│   │       ├── ini
+│   │       └── panels.ini
+│   ├── .keys
+│   │   ├── cert.pem
+│   │   ├── id_rsa.pem
+│   │   └── id_rsa.pub.pem
+│   └── .ssh
+│       ├── config
+│       ├── id_rsa
+│       └── id_rsa.pub
+└── var
+    └── system
+        ├── image.release
+        ├── image.sys
+        └── software
+            └── testapp.sys
+
+57 directories, 97 files

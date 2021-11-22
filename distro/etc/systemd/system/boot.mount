@@ -1,0 +1,11 @@
+[Unit]
+Description=Boot Partition
+
+[Mount]
+What=/dev/vda1
+Where=/boot
+Type=vfat
+Options=defaults,rw,sync
+
+[Install]
+WantedBy=multi-user.target

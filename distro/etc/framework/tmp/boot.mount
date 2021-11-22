@@ -1,0 +1,11 @@
+[Unit]
+Description=Boot Partition
+
+[Mount]
+What=/dev/mmcblk2p1
+Where=/boot
+Type=vfat
+Options=defaults,rw,sync,nofail
+
+[Install]
+WantedBy=multi-user.target

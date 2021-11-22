@@ -1,0 +1,4 @@
+2021-06:
+	- distro'ya touchegg isimli systemd daemonu kuruldu. bu sayede touchscreen
+	  multitouch gesture algiliyor. ornegin iki parmaginizla dokununca sag click
+	  gerceklesiyor.

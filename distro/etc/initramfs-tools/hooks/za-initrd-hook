@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+#
+# http://manpages.ubuntu.com/manpages/bionic/man8/initramfs-tools.8.html
+# ----------
+
+PREREQ=""
+
+prereqs() {
+   echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+. /usr/share/initramfs-tools/scripts/functions
+. /usr/share/initramfs-tools/hook-functions
+
+# console'a yazabilmek icin
+cp -r /lib/terminfo ${DESTDIR}/lib/
+cp -r /usr/share/terminfo ${DESTDIR}/usr/share/
+
+# initrd'de bulunmasini istedigimiz dosyalar
+cp -r /etc/initramfs-tools/files/* ${DESTDIR}/
+
+# openssl ile image decrypt edilirken kullanilmakta.
+cp -r /root/.keys ${DESTDIR}/etc/framework/.keys/
+
+# ascii framework logosu
+cp /etc/motd ${DESTDIR}/etc/
+
+mkdir -p ${DESTDIR}/usr/share/consolefonts/
+mkdir -p ${DESTDIR}/etc/default
+
+cp /etc/default/{keyboard,locale,console-setup} ${DESTDIR}/etc/default/
+cp -r /etc/console-setup ${DESTDIR}/etc/
+cp /usr/share/consolefonts/{Lat7,Lat15,Uni3}-Terminus16.psf.gz ${DESTDIR}/usr/share/consolefonts/
+
+# su an icin ihtiyac yok.
+net_tools=' curl dhclient dropbear ifconfig rsync ssh'
+
+list='awk basename bash bzip2 cat chmod chown cp clear
+date df dialog du false fdisk find fsck fsck.ext2
+fsck.ext3 fsck.ext4 fsck.fat fsck.msdos fsck.vfat file filename findmnt
+grep gzip head hwclock jq ln logsave lsblk lsmod mkdosfs
+mkfs mkfs.ext2 mkfs.ext3 mkfs.ext4 mkfs.fat mkfs.msdos
+mkfs.vfat more mountpoint id insmod lsmod nano parted progress
+pv pwd pinentry resize resize2fs resizepart readlink rm rmdir
+sed setsid sha256sum shutdown poweroff sleep sfdisk su sort sync stty setfont
+tar tee test touch tput tr tree true uname openssl which'
+
+for i in ${list[@]}; do
+	copy_exec $(which $i)
+done
+
+# initramfs'in icinde bulunan bazi paketler busybox gibi lightweight olan util-linux'a ait.
+# burada onlari elle degistirip daha fazla ozellige sahip olanlari yukluyoruz.
+# fakat mount, umount gibi uygulamalari da yuklemeye kalinca initramfs calismiyor.
+# yani yeni bir tane programi bu sekilde yuklemek isterseniz dikkatli olunmasinda fayda var.
+cp /bin/ls ${DESTDIR}/usr/bin
+cp /bin/dd ${DESTDIR}/usr/bin
+cp /bin/bash ${DESTDIR}/usr/bin
+cp /usr/bin/sleep ${DESTDIR}/usr/bin
+
+mkdir -p ${DESTDIR}/mnt/{master,p1,p2,p3,bootiso,rootiso,homeiso,point,usb,mmc,sdcard}

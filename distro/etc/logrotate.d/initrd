@@ -1,0 +1,8 @@
+/var/log/initrd.log {
+  rotate 1
+  daily
+  nocompress
+  size 10M
+  missingok
+  notifempty
+}

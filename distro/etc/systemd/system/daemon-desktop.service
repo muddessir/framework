@@ -1,0 +1,10 @@
+[Unit]
+Description=daemon-desktop
+After=lightdm.service display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/etc/framework/daemons/desktop.sh
+
+[Install]
+WantedBy=graphical.target

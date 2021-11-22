@@ -1,0 +1,28 @@
+# List of modules that you want to include in your initramfs.
+# They will be loaded at boot time in the order below.
+#
+# Syntax:  module_name [args ...]
+#
+# You must run update-initramfs(8) to effect this change.
+#
+# Examples:
+#
+# raid1
+# sd_mod
+# ump
+# disp
+# fbdev
+# mxc_dcic
+# virtio_blk
+# hdmi
+# lcd
+# usb_storage
+# uas
+# usbcore
+# scsi_mod
+# usb_common
+
+usb
+overlay
+mxc_dcic
+fbdev

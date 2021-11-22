@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+# ----------
+
+OPTION=
+PREREQ="udev"
+
+prereqs() {
+	echo "${PREREQ}"
+}
+
+case ${1} in
+	prereqs)
+		prereqs
+		exit 0
+		;;
+esac
+
+echo ""
+
+# framework ascii logo
+[[ -e /etc/motd ]] && { cat /etc/motd; }
+
+source /etc/framework/lib.h
+source /etc/framework/cmdline.h
+
+util_get_date >> $logfile
+
+do_led_blink "0"
+
+println "info" "ra technology 2021"
+println "success" "yukleniyor.."
+
+# bu script calistigi anda usb daha kernel tarafindan gorulmemis olabiliyor.
+# o yuzden 5 saniye kadar donanimlarin yuklenmesini bekliyoruz.
+# not: eger kernel cmdline parametresi olarak nowait eklenirse calismaz.
+
+[[ "$no_wait" != "yes"  ]] && {
+	sleep 3;
+}
+
+# console fontu ayarlaniyor.
+setfont '/usr/share/consolefonts/Lat7-Terminus16.psf.gz'

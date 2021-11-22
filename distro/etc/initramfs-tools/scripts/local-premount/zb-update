@@ -1,0 +1,563 @@
+#!/bin/bash
+
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+#
+# bu script initrd ile calisan image-update-system'dir. iki cesit imaj guncelleme
+# yontemi mevcut ki bunlardan ilki master-image dedigimiz IMX6 SOM'unun uzerinde
+# bulunan jumperlarin degistirilmesi ile boardun sdcard ile boot edilmesi ile
+# yapilir. bu yapida SOM uzerinde bulunan emmc diskin tamamini silinip formatlanir
+# yani fabrika ayarlarina cevrilir ve akabinde yeni imaj/isletim sistemi yuklenir.
+#
+# ikinci guncelleme yonteminde ise emmc tamamen formatlanmaz cunku /home klasorleri
+# diste ayri bir partition ustundedir ve bunlarin sistem/imaj guncellemeleri
+# yapildiginda korunmasi gerekmektedir. dolayisiyla bu tipteki guncellemeler
+# SOM uzerindeki jumperlara ihtiyac olmaksizin board uzerine takilan usb, harici
+# sdcard gibi disklere bakilir. eger icerisindeki imaj SOM ustunde yuklu olan
+# imajdan yeniyse /home partitionu haric boot ve root partitionlari formatlanip
+# yenileri yuklenir.
+#
+# her iki guncelleme de sdcard'in icinde /framework/update/image klasorlerine
+# bakar. bu klasorlerde 001,002,010,020 (020=v2.0) seklinde version bilgisine
+# gore alt dizinler bulunmaktadir ve her zaman en yuksek versiyon yalnizca
+# dikkate alinir. klasorlerin icerisinde boot.bin root.bin home.bin seklinde
+# encrypt edilmis dosyalar mevcuttur ve decryption islemi basariyla gerceklesirse
+# o zaman boot ve root partitionlari formatlanip yukleme yapilir.
+#
+# TODO: encryption islemleri tek fonksiyon altina tasinacak.
+# ----------
+
+OPTION=
+PREREQ="udev za-init"
+
+prereqs() {
+	echo "${PREREQ}"
+}
+
+case ${1} in
+	prereqs)
+		prereqs
+		exit 0
+		;;
+esac
+
+echo ""
+
+source /etc/framework/lib.h
+source /etc/framework/cmdline.h
+source /scripts/functions
+
+# kernel parametresi olarak girilince update-system calismaz.
+[[ "$update_system" == "no" ]] && {
+	println "warning" "update-system kapali.";
+	exit $success;
+}
+
+# eger initrd ustunde key yoksa islem yapmadan cikiyoruz ki bosuna ugrasmayalim.
+[[ ! -e /etc/framework/.keys/id_rsa.pem ]] && {
+	println "error" "decryption key (id_rsa.pem) bulunamadi.";
+	exit $failed;
+}
+
+# tarih bozuk oldugunda dosya yazma esnasinda hatalar olusabiliyor.
+# todo: simdilik elle degistiriliyor fakat bug'a sebep olur.
+if (( $(date "+%Y") < 2021 ))
+then
+	println "error" "sistem saati yanlis. lutfen RTC'yi kontrol ediniz.";
+
+	[[ "$master_image" == "yes" ]] && {
+		date -s '2023-01-01 00:00:00' >/dev/null;
+		println "info" "gecici tarih ayarlandi.";
+	}
+fi
+
+main() {
+
+	# cihaza takili olan butun diskleri tespit edip her birisinin icine girip kontrol ediyoruz
+	# eger framework/update/ klasoru icinde guncelleme varsa check-in yapiyoruz.
+	# not: hicbir sekilde bu kontrolleri cihazin ustunde bulunan dahili mmcblk2p1 ve p2 icin yapmayacagiz.
+	# guncellemeler yalnizca harici sdcard, usb gibi aygitlarla yapilmali.
+	# TODO: aciklama eklenecek.
+
+	if [[ "$master_image" == "yes" ]]
+	then
+		disks="${sdcard}p1"
+	else
+		disks=$(blkid --match-types vfat,ext2,ext3,ext4 --match-tag PARTUUID | grep -Ev "${emmc}p1|${emmc}p2" | awk -F':' '{print $1}' | sort -r | tr '\n' ' ')
+	fi
+
+	# update system'in kontrol edecegi dizin
+	base_update_folder="/mnt/point/framework/update"
+
+	println "wait" "update-system: check: $disks (`util_get_date 'time'`)"
+
+	# iki defa for dongusu ile diskleri kontrol ediyoruz cunku: dusunelim ki
+	# sisteme hem usb hem de sdcard takilmis olsun. bizler ilk usb icindeki klasorleri
+	# kontrol ederken yeni bir image guncellemesi bulamayip software guncellemesi buldugumuzda
+	# bunu mevcut sisteme yukleyecegiz. fakat bir sonraki disk olan sdcard'a sira geldiginde
+	# orada image guncellemesi varsa bu kez yaptigimiz software guncellemesi silinecek.
+	for item in ${disks[@]}
+	do
+		if do_mount_disk "$item" "/mnt/point"
+		then
+			
+			# bu asamada system image guncellemeleri var mi kontrol edip
+			# checksum'lari dogru ise baslatacagiz. klasorde bulunan dosyalardan
+			# yalnizca sayisal olarak en yuksek olan dizini sort ederek dikkate.
+			# aliniyoruz yani en yuksek versiyonlu update'i yukluyoruz.
+
+			[[ -d $base_update_folder/image/ ]] && { dir_update_source=$(/usr/bin/ls -1 -d $base_update_folder/image/* | sort -rV | head -n1); }
+
+			if [[ ! $(util_check_is_empty $dir_update_source) && -e $dir_update_source/image.sign && -e $dir_update_source/key.bin.enc ]] && [[ -e $dir_update_source/root.bin || -e $dir_update_source/boot.bin || -e $dir_update_source/home.bin ]]
+			then
+				do_start_image_update $dir_update_source
+
+				# en son log dosyasini usb,sdcard yani nereden guncelleme yapiliyorsa oraya yaziyoruz.
+				cp $logfile $dir_update_source/
+
+				# zz-finish isimli package bu dosyayi kontrol ediyor.
+				# guncelleme yapildiysa ekrana dialog cikariyor.
+
+				[[ "$update_successed" == "yes" ]] && {
+					touch /run/framework/image-update.success;
+				}
+			fi
+
+			# burada yaptigimiz islem: sayet mount edilen diskteki ../update/software
+			# klasorunde .appbin uzantili dosya varsa bu disk ismini bir degisken
+			# icine liste seklinde ekliyoruz ve hemen alttaki for dongusunde 
+			# yeni versiyon ise kurulum gerceklestiriyoruz.
+			[[ -d $base_update_folder/software/ ]] && ls $base_update_folder/software/*.appbin &>>$logfile && {
+				disks_for_software_update="$item $disks_for_software_update";
+			}
+			
+			do_safe_return $dir_update_source
+			do_umount "/mnt/point"
+		fi
+	done
+
+	# software update sistemi
+	# yukarida yazildigi uzere: iki kere mukerrer islem yapip mount islemi yapiyoruz ki
+	# yanlislikla usb,sdcard gibi farkli aygitlarin birinde image-update digerinde
+	# software update-unutulursa hem kisir donguye girmesin hem de neden guncelleme 
+	# gerceklesmiyor diye bug aranmasin.
+
+	# master_image takiliyken guncelleme yapilacak rootfs sdcard olmali.
+	[[ "$master_image" == "yes" ]] && software_update_rootfs="${emmc}p2" || software_update_rootfs=$root_fs
+
+	# diger konu ise yukleyecegimiz software yalnizca sistemdekinden daha guncel
+	# ise yukleme yapilmali. bunun icin som ustundeki rootfs'i mount edip kontrol ediyoruz.
+	do_mount_disk "$software_update_rootfs" "/mnt/p2" || {
+		println "error" "som ustundeki root dizini mount edilemedi. update islemine devam edilemiyor.";
+		return $failed;
+	}
+	
+	for j in ${disks_for_software_update[@]}
+	do
+		if do_mount_disk "${j}" "/mnt/point"
+		then
+			# klasor icindeki butun dosyalari for ile donup versiyon bilgilerini
+			# tespit ediyoruz. akabinde sistemde yuklu degilse kurulum gerceklestiriyoruz.
+			for k in $(ls $base_update_folder/software/*.appbin 2>>$logfile | sort -V )
+			do
+				do_start_software_update "$base_update_folder/software" "${k}"
+			done
+
+			do_safe_return $base_update_folder/software
+			do_umount "/mnt/point"
+		fi
+	done
+
+	do_umount "/mnt/p2"
+
+	println "success" "update-system: ok."
+}
+
+# guncelleme isi 3 asamada gerceklesiyor. do_start_image_update fonksiyonu
+# ilk once paketin icindeki keylerin dogrulugunu kontrol edip SOM ustunde
+# kurulu olan image'in versiyonundan daha guncel ise validate_ isimli
+# fonksiyonu cagiriyor ve image'larin checksumlari kontrol ediliyor.
+# son olarak da burn_ fonksiyonlari cagrilir disklere yazma gerceklesiyor.
+do_start_image_update() {
+
+	# orn: /mnt/point/framework/update/image/14
+	dir_update_source=${1}
+	
+	# sadece boot veya root img guncellenmek istenebilir.
+	local start_update="no"
+	local update_root_partition="no"
+	local update_boot_partition="no"
+	local update_home_partition="no"
+
+	# key.bin.enc dosyasi image'larin sifrelendigi keyi iceriyor. ilk once bu 
+	# dosyayi RSA private key ile decrypt ediyoruz akabinde bu key ile tar dosyalari
+	# extract yapacagiz. burada decrypt edilmis key dosyasini flash vb. bir yere
+	# yazmak yerine dogrudan bir degisken icerisine aktariyoruz.
+	println "wait" "guncelleme anahtarlari decrypt ediliyor bekleyiniz."
+	
+	# ledi ust uste yakip akabinde surekli on durumuna getiriyoruz.
+	# ne zamanki led sonunce o zaman anlasiliyor ki guncelleme basarili.
+	load_modules
+	do_led_blink_effect
+	do_led_blink 0
+
+	openssl rsautl -decrypt -inkey /etc/framework/.keys/id_rsa.pem -in $dir_update_source/key.bin.enc -out /run/framework/key.bin 2>>$logfile
+
+	# ilk once image.sys json dosyasindan yeni imajin versiyonunu ogrenip sistemdeki ile
+	# kiyasliyoruz. eger ayni ise islem yapmiyoruz. bu islemi yalnizca usb gibi ota guncellemeleri
+	# icin yapiyoruz. yani som uzerindeki jumperlar boot moduna alinmissa yapmaya gerek yok.
+	openssl enc -aes-256-ecb -pbkdf2 -iter 20000 -nosalt -d -pass file:/run/framework/key.bin -in $dir_update_source/image.sign 2>>$logfile | \
+		tar --touch --no-same-owner -xzpf - -C $dir_update_source/ &>>$logfile || {
+			println "error" "image.sign isimli versiyon bilgisilerinin bulundugu dosya decrypt edilemedi.";
+			return $failed;
+	}
+
+	local json_new_image_info=$(cat $dir_update_source/image.sys); {
+		local new_boot_version=$(echo $json_new_image_info | jq '.boot_version' -r);
+		local new_image_version=$(echo $json_new_image_info | jq '.distro_version' -r);
+
+		local new_boot_img_hash=$(echo $json_new_image_info | jq '.boot_img_hash' -r);
+		local new_root_img_hash=$(echo $json_new_image_info | jq '.root_img_hash' -r);
+		local new_home_img_hash=$(echo $json_new_image_info | jq '.home_img_hash' -r);
+		
+		# eger bu tarih gecmisse artik guncelleme paketi gecersizdir.
+		local last_valid_date=$(echo $json_new_image_info | jq '.last_valid_date' -r);
+	}
+
+	# image.sys icinde checksum yoksa uyari veriyoruz.
+	util_check_is_empty $new_image_version && {
+		println "error" "yeni imajin versiyon ve checksum bilgileri paket ($dir_update_source/image.sign) icinde bulunamadi.";
+		return $failed;
+	}
+
+	# guncelleme paketinin suresi doldu ise islem yapmayacagiz
+	(( $last_valid_date < `date "+%Y%m%d"` )) && {
+		println "info" "harici diskte bulunan guncelleme paketinin son gecerlilik tarihi ($last_valid_date) eski.";
+		return $failed;
+	}
+
+	# TODO: iki cesit formatlama mevcut.
+	if [[ "$master_image" == "yes" ]]
+	then
+
+		# eger boot.bin ve root.bin hataliysa islem yapmadan cikmamiz lazim ki
+		# guncelleme yapamayacagimiz halde diski formatlamayalim.
+		do_extract_and_validate_image $dir_update_source $new_boot_img_hash "boot" || return $failed;
+		do_extract_and_validate_image $dir_update_source $new_root_img_hash "root" || return $failed;
+		do_extract_and_validate_image $dir_update_source $new_home_img_hash "home" || return $failed;
+
+		# eger master image ile formatlama yapiliyorsa som uzerindeki disk fabrika
+		# ayarlarina cevrilir yani diskin tamamini silinip yeniden bicimlendirilir.
+		parted --script $emmc \
+			mklabel msdos \
+			mkpart primary fat32 10MiB 100MiB \
+			mkpart primary ext4 100MiB 80% \
+			mkpart primary ext4 80% 100% &>>$logfile || {
+				println "error" "parted ile $emmc som diski formatlama basarisiz oldu. lutfen loglari inceleyiniz.";
+				return $failed;
+		}
+		
+		local update_root_partition="yes"
+		local update_boot_partition="yes"
+		local update_home_partition="yes"
+		local start_update="yes"
+
+	else
+		# ota image update sistemi.
+		# sisteme kurulu olan mevcut imajin versiyonunu tespit ediyoruz.
+
+		if ! do_mount_disk $root_fs /mnt/p2
+		then
+			println "error" "${red}kritik hata: som diski ($root_fs) mount edilemedi.${normal} lutfen loglari inceleyiniz.";
+			return $failed;
+		else
+			# image.sys dosyasi image.sign icinden extract ediliyor. eger yoksa
+			# guncelleme yapamayiz.
+			[[ ! -f /mnt/p2/var/system/image.sys ]] && {
+				println "error" "som ustundeki image'da version bilgisi dosyasi bulunamadi: /var/system/image.sys";
+				return $failed;
+			}
+
+			local exist_image_version=$(cat /mnt/p2/var/system/image.sys | jq '.distro_version' -r)
+			local exist_boot_version=$(cat /mnt/p2/var/system/image.sys | jq '.boot_version' -r)
+
+			do_umount "/mnt/p2"
+		fi
+
+		# yeni image yuklu olandan guncelse islem yapiyoruz
+		if (( $new_boot_version > $exist_boot_version ))
+		then
+			do_extract_and_validate_image $dir_update_source $new_boot_img_hash "boot" && {
+				start_update="yes";
+				update_boot_partition="yes";
+			}
+		else
+			println "info" "kaynak boot.img versiyonu ($new_boot_version) som'dakinden ($exist_boot_version) yeni degil."
+		fi
+
+		if (( $new_image_version > $exist_image_version ))
+		then
+			do_extract_and_validate_image $dir_update_source $new_root_img_hash "root" && {
+				start_update="yes";
+				update_root_partition="yes";
+			}
+		else
+			println "info" "kaynak root.img versiyonu ($new_image_version) som'dakinden ($exist_image_version) yeni degil."
+		fi
+	fi
+
+	if [[ "$start_update" == "yes" ]]
+	then
+		println "success" "update-system: image guncelleme baslatildi."
+
+		# kisa sureli ledleri on/of yapip console olmayan durumlarda
+		# guncellemenin basladigini haber veriyoruz.
+		do_led_blink_effect
+
+		[[ "$update_boot_partition" == "yes" ]] && do_burn_partition $dir_update_source "boot"
+		[[ "$update_root_partition" == "yes" ]] && do_burn_partition $dir_update_source "root"
+		[[ "$update_home_partition" == "yes" ]] && do_burn_partition $dir_update_source "home"
+
+		do_umount "/mnt/p1" "/mnt/p2" "/mnt/p3"
+	fi
+
+}
+
+do_extract_and_validate_image() {
+
+	# orn: /mnt/point/framework/update/image/14
+	dir_update_source=$1
+
+	# sha256 checksum
+	img_hash=$2
+
+	# orn: boot
+	update_target=$3
+
+	if [[ -f "$dir_update_source/$update_target.bin" ]]
+	then
+		# ----------------------------------------------------------------------
+		println "info" "$update_target.bin extract edililiyor.."
+			pv -c -N "[ wait ] progress " -w 70 "$dir_update_source/$update_target.bin" | \
+				openssl enc -aes-256-ecb -pbkdf2 -iter 20000 -nosalt -d -pass file:/run/framework/key.bin 2>>$logfile | \
+					tar --touch --warning=no-timestamp --no-same-owner -xzpf - -C $dir_update_source/ &>>$logfile || {
+						println "error" "$update_target.bin extract edilemedi.";
+						return $failed;
+			}
+		# ----------------------------------------------------------------------
+
+		# ----------------------------------------------------------------------
+		println "wait" "$update_target.img checksum hesaplaniyor..";
+			extracted_img_hash=$(sha256sum "$dir_update_source/$update_target.img" | awk '{ print $1 }');
+
+			[[ "$extracted_img_hash" != "$img_hash" ]] && {
+				println "error" "$update_target.img checksum hatali.";
+				return $failed;
+			}
+		# ----------------------------------------------------------------------
+
+		return $success
+	fi
+
+	# buraya kadar geldiyse dosya yok.
+	return $failed
+}
+
+do_burn_partition() {
+
+	# orn: /mnt/point/framework/update/image/14
+	dir_update_source=$1
+
+	# orn: boot
+	update_target=$2
+
+	[[ "$update_target" == "boot" ]] && { part="p1"; disktype="fat"; append="-F 32"; }
+	[[ "$update_target" == "root" ]] && { part="p2"; disktype="ext4"; append=""; }
+	[[ "$update_target" == "home" ]] && { part="p3"; disktype="ext4"; append=""; }
+
+	# orn: /dev/mmcblk2p2
+	disk="${emmc}${part}"
+
+	if [[ -f "$dir_update_source/$update_target.img" ]]
+	then
+
+		# eger guncelleme tipi boot ise yeni uboot kernelini
+		# dogrudan diskin uzerine yaziyoruz.
+
+		if [[ "$update_target" == "boot" ]]
+		then
+
+			do_loop_mount_disk "$dir_update_source/boot.img" "/mnt/bootiso/" "vfat" || {
+				println "error" "boot.img mount edilemedi";
+				return $failed;
+			}
+
+			if [[ -e /mnt/bootiso/u-boot.imx ]]
+			then
+				dd if=/mnt/bootiso/u-boot.imx of=${emmc} bs=512 seek=2 conv=sync &>>$logfile || {
+					println "error" "uboot guncellemesi yapilamadi.";
+					do_loop_unmount_disk "/mnt/bootiso";
+					return $failed;
+				}
+			fi
+
+			do_loop_unmount_disk "/mnt/bootiso"
+		fi
+
+		# ----------------------------------------------------------------------
+		println "info" "$update_target partition formatlaniyor.."
+			echo y | mkfs -t $disktype $append "${emmc}${part}" &>>$logfile || {
+				println "error" "${emmc}${part} partition formatlanamadi.";
+				return $failed;
+			}
+		# ----------------------------------------------------------------------
+
+		# ----------------------------------------------------------------------
+		println "info" "$update_target dosya sistemi kopyalaniyor.."
+			pv -c -N "[ wait ] progress " -w 70 $dir_update_source/$update_target.img | \
+				dd of="${emmc}$part" conv=notrunc,noerror &>>$logfile || {
+					println "error" "$update_target kopyalama islemi hatasi. lutfen loglari inceleyiniz.";
+					return $failed;
+			}
+		# ----------------------------------------------------------------------
+
+		# yazilan yeni imajin versiyon bilgisini mutlaka yazdigimiz diske kopyaliyoruz ki
+		# root.img icindeki eski kalmissa sonsuz dongu halinde formatlama yapmasin.
+
+		do_mount_disk "${emmc}$part" "/mnt/p2" 
+		
+		mountpoint "/mnt/p2" &>/dev/null && {
+			cp $dir_update_source/image.sys /mnt/p2/var/system/ &>>$logfile;
+			do_umount "/mnt/p2";
+		}
+
+		sync && {
+			println "success" "$update_target partition guncellemesi tamamlandi..";
+			update_successed="yes";
+			return $success;
+		}
+
+		rm -f $dir_update_source/${update_target}.img
+	fi
+
+	return $failed
+}
+
+do_start_software_update() {
+
+	# orn: /mnt/point/framework/update/software
+	local dir_update_source=$1
+
+	# orn: /mnt/point/framework/update/software/appname-v1.appbin
+	local package_appbin=$2
+
+	# orn: appname-v1
+	local package_basename=$(basename $package_appbin '.appbin')
+
+	# orn: /mnt/point/framework/update/software/appname-v1.sign
+	local package_sign=${package_appbin/'.appbin'/'.sign'}
+
+	# orn: /mnt/point/framework/update/software/extracted/appname-v1
+	local extract_path="$dir_update_source/extracted/$package_basename"
+
+	mkdir -p $extract_path &>>$logfile || {
+		println "error" "dosyalarin erisilecegi extract klasoru ($extract_path) olusturulamadi.";
+		return $failed;
+	}
+
+	println "info" "$package_basename.sign decrypt ediliyor."
+	# ----------------------------------------------------------------------
+		# key.bin.enc dosyasi image'larin sifrelendigi keyi iceriyor. ilk once bu 
+		# dosyayi RSA private key ile decrypt ediyoruz akabinde bu key ile tar dosyalari
+		# extract yapacagiz.
+		openssl rsautl -decrypt -inkey /etc/framework/.keys/id_rsa.pem -in "$dir_update_source/${package_basename}.key.bin.enc" -out /run/framework/key.bin 2>>$logfile
+		
+		openssl enc -aes-256-ecb -pbkdf2 -iter 20000 -nosalt -d -pass file:/run/framework/key.bin -in $package_sign 2>>$logfile | \
+			tar --touch --warning=no-timestamp --no-same-owner -xzpf - -C $extract_path &>>$logfile || {
+				println "error" "$package_basename extract edilemedi.";
+				return $failed;
+		}
+
+		[[ ! -e $extract_path/package.sys ]] && {
+			println "error" "versiyon bilgisini iceren $package_basename/package.sys dosyasi bulunamadi.";
+			return $failed;
+		}
+	# ----------------------------------------------------------------------
+
+	# ----------------------------------------------------------------------
+	# yeni paket ile sistemde yuklu olan paketin versiyon bilgileri karsilastirilir.
+	# sayet sistemde hic yuklu degilse veya eski versiyon ise guncelleme yapilir.
+
+	local json_software_info=$(cat $extract_path/package.sys 2>>$logfile ); {
+		local software_package_name=$(echo $json_software_info | jq '.name' -r);
+		local last_valid_date=$(echo $json_software_info | jq '.last_valid_date' -r);
+		local new_software_version=$(echo $json_software_info | jq '.version' -r);
+		local new_software_hash=$(echo $json_software_info | jq '.hash' -r);
+	}
+
+	local json_exist_software_info=$(cat /mnt/p2/var/system/software/$software_package_name.sys 2>>$logfile);
+	local exist_software_version=$(util_nvl "$(echo $json_exist_software_info | jq '.version' -r 2>/dev/null)" )
+
+	(( $last_valid_date < `date "+%Y%m%d"` )) && {
+		println "info" "software update paketi tarihi eski: $last_valid_date";
+		return $failed;
+	}
+	# ----------------------------------------------------------------------
+
+	# software paketi daha once yuklenmediyse exist_software_version null gelecektir.
+	if (( $new_software_version > $exist_software_version ))
+	then
+		# ----------------------------------------------------------------------
+		println "info" "$package_basename.appbin decrypt ediliyor."
+			pv -c -N "[ wait ] progress " -w 70 "$package_appbin" | \
+				openssl enc -aes-256-ecb -pbkdf2 -iter 20000 -nosalt -d -pass file:/run/framework/key.bin 2>>$logfile | \
+					tar --touch --warning=no-timestamp --no-same-owner -xzpf - -C $extract_path &>>$logfile || {
+						println "error" "$package_basename extract edilemedi.";
+						return $failed;
+			}
+		# ----------------------------------------------------------------------
+
+		# ----------------------------------------------------------------------
+		println "wait" "package checksum hesaplaniyor.."
+			local extracted_software_hash=$(sha256sum "$extract_path/package.tar.gz" | awk '{ print $1 }');
+			
+			[[ "$new_software_hash" != "$extracted_software_hash" ]] && {
+				println "error" "$package_basename checksum hatali.";
+				return $failed;
+			}
+		# ----------------------------------------------------------------------
+
+		# ----------------------------------------------------------------------
+		println "info" "software guncellemesi basladi."
+
+			# chown gibi komutlarin calisabilmesi icin gerekli.
+			cp /mnt/p2/etc/{passwd,group,shadow,shells} /etc/ &>>$logfile
+
+			[[ -f $extract_path/package.sh ]] && {
+				bash -c " source /etc/framework/lib.h; source $extract_path/package.sh; println 'info' 'package.sh: do_preinstall'; do_preinstall &>> $logfile;";
+			}
+
+			pv -c -N "[ wait ] progress " -w 70 $extract_path/package.tar.gz | \
+				tar --warning=no-timestamp -xzpf - -C /mnt/p2/ &>>$logfile || {
+					println "error" "$extract_path/package.tar.gz extract edilemedi.";
+					return $failed;
+			}
+		# ----------------------------------------------------------------------
+
+		# guncelleme sonrasi calistirilacak script.
+		[[ -f $extract_path/package.sh ]] && {
+			bash -c " source /etc/framework/lib.h; source $extract_path/package.sh; println 'info' 'package.sh: do_postinstall'; do_postinstall &>> $logfile;";
+		}
+
+		mkdir -p /mnt/p2/var/system/software && cp $extract_path/package.sys "/mnt/p2/var/system/software/$software_package_name.sys"
+		
+		# fonksiyondan cikinca siliniyor ama tedbiren yine silelim.
+		rm -rf $extract_path
+		
+		touch /run/framework/software-update.success
+	fi
+
+	return $success
+}
+
+main "$@"

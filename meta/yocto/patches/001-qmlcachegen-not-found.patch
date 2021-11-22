@@ -1,0 +1,12 @@
+diff --git a/recipes-qt/packagegroups/nativesdk-packagegroup-qt5-toolchain-host.bb b/recipes-qt/packagegroups/nativesdk-packagegroup-qt5-toolchain-host.bb
+index facd276..0c3ca2d 100644
+--- a/recipes-qt/packagegroups/nativesdk-packagegroup-qt5-toolchain-host.bb
++++ b/recipes-qt/packagegroups/nativesdk-packagegroup-qt5-toolchain-host.bb
+@@ -12,5 +12,6 @@ RDEPENDS_${PN} += " \
+     nativesdk-qttools-tools \
+     nativesdk-qtbase \
+     nativesdk-qtbase-dev \
++    nativesdk-qtdeclarative-tools \
+     nativesdk-perl-modules \
+ "
+

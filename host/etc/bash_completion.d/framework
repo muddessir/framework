@@ -1,0 +1,46 @@
+#/usr/bin/env bash
+
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+#
+# framework yazip tab tusuna basildiginda kestirmelerin gelmesi icin kullanilmakta.
+# https://opensource.com/article/18/3/creating-bash-completion-script
+# ----------
+
+tags_="core dev desktop --help --workdir --source --prepare"
+vars_="all= base= bridge= build= cmdline_append= do= download_only= extract= extra_packages= initrd= \
+nfs= nograph= package_name= sdcard_iso= sdcard_bootpart_size= sdcard_total_size= snapshot= sync= target= where= \
+qemu_tcp_forw_port= vnc= release_name= qemu_conf= debug_kernel="
+
+funcs_=" \
+do_bootstrap \
+do_build_initrd \
+do_build_kernel \
+do_build_qemu_kernel \
+do_build_uboot \
+do_chroot \
+do_create_master_img \
+do_create_new_rsa_keys \
+do_create_sdcard \
+do_create_software_update_package \
+do_create_virtual_network \
+do_mount_sysroot \
+do_prepare_host \
+do_prepare_installer \
+do_remove_virtual_network \
+do_run_qemu \
+do_sanity_check \
+do_second_stage \
+do_umount_sysroot \
+do_update_sdcard \
+main \
+println \
+usage \
+util_check_is_empty \
+util_get_date \
+util_is_number \
+util_nvl \
+util_trim \
+"
+
+complete -W "$tags_ $funcs_ $vars_" framework.sh framework

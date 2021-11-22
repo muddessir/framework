@@ -1,0 +1,11 @@
+deb http://deb.debian.org/debian buster main contrib
+#deb-src http://deb.debian.org/debian buster main contrib
+
+deb http://deb.debian.org/debian-security/ buster/updates main contrib
+#deb-src http://deb.debian.org/debian-security/ buster/updates main contrib
+
+deb http://deb.debian.org/debian buster-updates main contrib
+#deb-src http://deb.debian.org/debian buster-updates main contrib
+
+# deb http://deb.debian.org/debian buster-backports main contrib
+# deb-src http://deb.debian.org/debian buster-backports main contrib

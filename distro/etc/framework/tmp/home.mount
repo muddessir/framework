@@ -1,0 +1,11 @@
+[Unit]
+Description=Boot Partition
+
+[Mount]
+What=/dev/mmcblk2p3
+Where=/home
+Type=ext4
+Options=defaults,nofail
+
+[Install]
+WantedBy=multi-user.target

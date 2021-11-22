@@ -1,0 +1,141 @@
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+# 
+# https://www.thegeekstuff.com/2008/10/execution-sequence-for-bash_profile-bashrc-bash_login-profile-and-bash_logout/
+# ----------
+
+# kisayollar
+alias ls="ls -lahF --color=always --group-directories-first"
+alias ..="cd .."
+alias nano="nano -c"
+alias sudo="sudo "
+alias apt="sudo apt "
+
+# console renklendirmeleri
+bold=$(tput bold)
+normal=$(tput sgr0)
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+success=0
+failed=1
+
+# distro guncellemelerinde kullandigimiz dizin
+dir_init="/etc/framework"
+dir_system="/var/system"
+
+# terminali clear yaptiktan sonra resetler ki mouse scroll ile cikilinca gozukmesin.
+function m-clr() {
+	clear && printf '\e[3J' && tput reset
+}
+
+# ikinci parametre olarak verilen dir ve subdir'larin toplam boyutlarini gosterir.
+function m-size() {
+	local where=${1:-/}
+	sudo du -h -d 1 --exclude=/{proc,sys,dev,mnt} $where | sort -h
+}
+
+function m-upgrade() {
+	sudo apt update && sudo apt upgrade
+}
+
+function m-find() {
+	local what=$1
+	local where=${2:-.}
+	local extra=$3
+
+	eval "sudo find $where -name $what $extra \
+	-not -path '/dev/*' \
+	-not -path '/sys/*' \
+	-not -path '/tmp/*' \
+	-not -path '/run/*' \
+	-not -path './.local/share/Trash/*' \
+	-not -path './.git/*';
+	"
+}
+
+function m-grep() {
+	eval "sudo grep \"$1\" ${2:-$PWD} ${@%$1} -rlFiI --color=always --exclude-dir=.git $3"
+}
+
+# gtkterm gibi konsollardan baglanirken ekranin cozunurlugunu yukseltir.
+function m-terminal-size() {
+	stty rows ${1:-50} cols ${2:-100}
+}
+
+function m-up() {
+	sudo apt update -y
+	sudo apt upgrade -y
+}
+
+function println() {
+
+	local type=$1
+	local message=$2
+
+	# fonksiyon parametresiz calistirilmasin.
+	[[ -z "$type" || -z "$message" ]] && return $failed
+	
+	local info_color="${normal}"
+	local indicator="[>]"
+
+	[[ ${type: -1} == '+' ]] && type=${type%?} && indicator="${bold}${green}[+]"
+	[[ ${type: -1} == '-' ]] && type=${type%?} && indicator="${bold}${red}[-]"
+
+	[[ ${type} == "success" ]] && info_color="${bold}${green}"
+	[[ ${type} == "error" ]] && info_color="${bold}${red}"
+	[[ ${type} == "warning" ]] && info_color="${bold}"
+
+	echo -e "${indicator}${normal} ${info_color}${message}${normal}"
+}
+
+# parametre basindaki ve sonundaki bosluklari siler.
+function util_trim() {
+	echo $1 | sed -e 's/^[[:space:]]*//'
+}
+
+# verilen parametre null veya empty ise 0 doner.
+# sayet ikinci parametre verilirse 0 yerine, girilen deger doner.
+function util_nvl() {
+	[[ ! -z $2 ]] && ret=$2 || ret=0
+	[[ "$(util_trim $1)" == "" ]] && echo ${ret} || echo ${1}
+}
+
+# verilen parametre null, empty, bosluk ise 0=true degilse 1=false doner.
+function util_check_is_empty() {
+	[[ "$(util_trim $1)" != "" && "$1" != "null" && "$1" != "NULL" ]] && return $failed || return $success
+}
+
+# `util_is_number "22a"` geriye -1 dondurur `util_is_number "22a" 0` fonksiyon
+# sonuna baska bir integer verilirse de 22a number degilse 0 yani o verilen par. doner
+function util_is_number() {
+	[[ -z $2 ]] && ret=-1 || ret=$2
+	[[ ! -z "${1##*[!0-9]*}" ]] && echo $1 || echo $ret
+}
+
+# parametresiz cagrilinca datetime. bunlar disinda time, date gibi yanliz
+# ilgili sonuc alinabilmekte. format girilecekse mutlaka her iki parametre yazilmali.
+# orn: `util_getdate "datetime" "%m%d%Y%H%M"` gibi
+function util_get_date() {
+
+	# birinci parametre bos veya "datetime" girilince
+	format="%Y-%m-%d %H:%M"
+
+	[[ "$1" == "time" ]] && format="%H:%M"
+	[[ "$1" == "date" ]] && format="%Y-%m-%d"
+
+	# format ikinci parametre olarak belirlenebilir.
+	[[ "$(util_trim $2)" != "" ]] && format=$2
+
+	echo "$(date "+${format}")"
+}
+
+function util_replace_str() {
+	util_check_is_empty $1 || util_check_is_empty $2 || {
+		echo $1 | sed "s/${2//\//\\/}/${3//\//\\/}/g";
+	}
+}
+
+# dagitimi hazirlarken daha kolay gelistirme yapabilmek icin hazirlanan kisayollar
+[[ -f /etc/framework/conf/dev.sh ]] && {
+	. /etc/framework/conf/dev.sh
+}

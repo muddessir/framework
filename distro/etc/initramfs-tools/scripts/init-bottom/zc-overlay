@@ -1,0 +1,86 @@
+#!/bin/bash
+
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+#
+# linuxun readonly-rootfs olarak acilmasina imkan saglayan sistemdir.
+# kernele dogrudan ro parametresi vererek linux readonly yapilamiyor cunku
+# random seed, systemd, ssh gibi uygulamala/moduller rootfs'e yazamayinca
+# saglikli calismiyor. readonly yontemleri icin asagidaki linkler incelenebilir.
+#
+# ubuntu icin 'overlayfs' debian icin 'bilibop-lockfs' kullanilabilir fakat
+# kontrolu daha zor. docker, asagida kurdugumuz sekilde bir yapi kullanmakta.
+# nitekim bu sayede development yaparken farkli farkli kucuk snapshot.img dosyalari
+# olusturup yazilim gelistirme sureclerini hizlandirmak cok daha rahat oluyor.
+#
+# https://github.com/chesty/overlayroot/blob/master/init-bottom-overlay
+# https://events.static.linuxfound.org/sites/events/files/slides/readonly-rootfs-elce-2016.pdf
+#
+# ----------
+
+OPTION=
+PREREQ=""
+
+prereqs() {
+	echo "${PREREQ}"
+}
+
+case ${1} in
+	prereqs)
+		prereqs
+		exit 0
+		;;
+esac
+
+source /etc/framework/lib.h
+source /etc/framework/cmdline.h
+
+[[ "$protected_rootfs" != "yes" || "$master_image" == "yes" ]] && {
+	println "warning" "protected rootfs kapali."
+	exit $success;
+}
+
+cat /proc/filesystems | grep -q "overlay" || {
+	println "error" "'overlay' isimli kernel driver'i yuklu degil.";
+	exit $failed;
+}
+
+println "wait" "overlay filesystem basladi."
+
+# sistem readonly olarak mount edildiginde en fazla bu miktar kadar
+# write islemi yapilabilir. bunun amaci ise linuxun ihtiyac duydugu
+# cache ve loglama islemleri icin.
+util_check_is_empty $overlay_max_size && {
+	export overlay_max_size=100m;
+}
+
+mkdir -p /overlay
+
+mount -t tmpfs -o "size=$overlay_max_size" tmpfs /overlay &>>$logfile || {
+	println "error" "overlay: tmpfs mount edilemedi.";
+	exit $failed;
+}
+
+mkdir -p /overlay/{work,upper,lower}
+
+mount -n -o move $rootmnt /overlay/lower &>>$logfile || {
+	println "error" "overlay: $rootmnt /overlay/lower klasorune mount edilemedi.";
+	exit $failed;
+}
+
+mount -t overlay -o lowerdir=/overlay/lower,upperdir=/overlay/upper,workdir=/overlay/work overlay $rootmnt &>>$logfile || {
+	println "error" "overlay: rootfs lower,upper,work olusturulamadi.";
+	exit $failed;
+}
+
+mkdir -p $rootmnt/overlay || {
+	println "error" "overlay: root dizininde overlay klasoru olusturulamiyor.";
+	exit $failed;
+}
+
+mount -n -o bind /overlay $rootmnt/overlay &>>$logfile || {
+	println "error" "overlay: /overlay -> rootmnt/overlay rebind yapilamadi.";
+	exit $failed;
+}
+
+println "success" "${bold}rootfs readonly olarak mount edildi."

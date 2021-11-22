@@ -1,0 +1,9 @@
+[Unit]
+Description=daemon-init
+
+[Service]
+Type=oneshot
+ExecStart=/etc/framework/daemons/init.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+# ----------
+
+OPTION=
+PREREQ="zc-overlay"
+
+prereqs() {
+	echo "${PREREQ}"
+}
+
+case ${1} in
+	prereqs)
+		prereqs
+		exit 0
+		;;
+esac
+
+source /etc/framework/lib.h
+
+println "success" "${bold}initrd-sync.${normal}"
+
+# initrd son islemleri bitirirken run klasorundeki loglari rootfs'e 
+# tasiyoruz ki kaybolmasin, boottan sonra bakabilelim.
+# her initrd calistiginda loglari rootfs'teki log dosyasinin ustune ekliyoruz.
+# eskilerin silinmemesi icin cat ile >> yaptik. isletim sisteminde bulunan
+# /etc/logrotate.d/initrd 10MB'i gecince bunlari rotate yapiyor.
+[[ -f $logfile ]] && {
+	cat $logfile >> $rootmnt/var/log/initrd.log;
+}
+
+echo ""

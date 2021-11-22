@@ -1,0 +1,25 @@
+Section "ServerLayout"
+        Identifier "layout_single_portrait1"
+        Screen "screen_0" Absolute 0 0
+EndSection
+
+Section "Monitor"
+		Identifier "monitor_0"
+EndSection
+
+Section "Device"
+		Identifier "primary_video device"
+		Driver "fbdev"
+		Option "fbdev" "/dev/fb0"
+		Option "Rotate" "CW"
+EndSection
+
+Section "Screen"
+        Identifier "screen_0"
+		Monitor "monitor_0"
+		Device "primary_video device"
+		DefaultDepth 24
+		DefaultFbBpp 32
+		SubSection "Display"
+		EndSubSection
+EndSection

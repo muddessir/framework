@@ -1,0 +1,28 @@
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+#
+# qemu icin kullandigimiz linux kerneli derlerken bu toolchain
+# ayarlarini kullanmaktayiz.
+# ----------
+
+export ARCH=arm64
+export CROSS_COMPILE=aarch64-linux-gnu-
+export CC="aarch64-linux-gnu-gcc "
+export CXX="aarch64-linux-gnu-g++ "
+export CPP="aarch64-linux-gnu-gcc "
+export AS="aarch64-linux-gnu-as "
+export LD="aarch64-linux-gnu-ld "
+export GDB=aarch64-linux-gnu-gdb
+export STRIP=aarch64-linux-gnu-strip
+export RANLIB=aarch64-linux-gnu-ranlib
+export OBJCOPY=aarch64-linux-gnu-objcopy
+export OBJDUMP=aarch64-linux-gnu-objdump
+export AR=aarch64-linux-gnu-ar
+export NM=aarch64-linux-gnu-nm
+export M4=m4
+export TARGET_PREFIX=aarch64-linux-gnu-
+export CONFIGURE_FLAGS="--target=aarch64-linux-gnu --host=aarch64-linux-gnu --build=x86_64-linux"
+export CFLAGS=" -O2 -pipe -g -feliminate-unused-debug-types "
+export CXXFLAGS=" -O2 -pipe -g -feliminate-unused-debug-types "
+export LDFLAGS="-Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed"
+export CPPFLAGS=""

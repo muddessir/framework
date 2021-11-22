@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# ----------
+# Developer: Recai Almaz (muddessir@outlook.com)
+# ----------
+
+OPTION=
+PREREQ="zb-update"
+
+prereqs() {
+	echo "${PREREQ}"
+}
+
+case ${1} in
+	prereqs)
+		prereqs
+		exit 0
+		;;
+esac
+
+source /etc/framework/lib.h
+source /etc/framework/cmdline.h
+
+# zb-update isimli boot scripti ile sayet disk burn islemi yapildiysa
+# burada artik diski resize edip ekrana tamamladi mesaji cikariyoruz.
+
+if [[ -f /run/framework/image-update.success ]]
+then
+
+	# formatlama sonrasi diski gercek boyutuna resize ediyoruz.
+	println "wait" "partition resize ediliyor."
+
+	# tedbiren eklendi.
+	do_umount "${emmc}p1" "${emmc}p2" "${emmc}p3"
+
+	# root partition
+	e2fsck -p -v "${emmc}p2" &>>$logfile
+	resize2fs -f "${emmc}p2" &>>$logfile
+
+	# home partition
+	e2fsck -p -v "${emmc}p3" &>>$logfile
+	resize2fs -f "${emmc}p3" &>>$logfile
+fi
+
+# yukarida diski resize ettikten sonra ancak update guncellemesi yapabiliriz.
+# dolayisi ile 2 kez asagida ayni isi yapmak zorundayiz.
+if [[ -f /run/framework/software-update.success ]]
+then
+	rm -f /run/framework/software-update.success
+	println "success" "software guncellemesi tamamlandi.. (`util_get_date 'time'`)"
+	sleep 5;
+fi
+
+if [[ -f /run/framework/image-update.success ]]
+then
+	do_led_blink 1
+	rm -f /run/framework/image-update.success
+	println "success" "${bold}${green}sistem guncelleme tamamlandi. lutfen bekleyiniz.${normal}"
+	sleep 5;
+
+	[[ "$master_image" == "yes" ]] && {
+		println "success" "${bold}${green}lutfen board'un elektrigini kesip sdcardi cikartiniz.${normal} (`util_get_date 'time'`)";
+		halt;
+	}
+fi

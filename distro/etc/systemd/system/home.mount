@@ -1,0 +1,11 @@
+[Unit]
+Description=Boot Partition
+
+[Mount]
+What=/dev/vda3
+Where=/home
+Type=ext4
+Options=defaults
+
+[Install]
+WantedBy=multi-user.target
